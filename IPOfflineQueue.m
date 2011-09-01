@@ -54,51 +54,51 @@ static NSMutableDictionary *_activeQueues = nil;
 
 - (int)stepQuery:(sqlite3_stmt *)stmt
 {
-   	int ret;	
-	// Try direct first
-	ret = sqlite3_step(stmt);
-	if (ret != SQLITE_BUSY && ret != SQLITE_LOCKED) return ret;
-	
+    int ret;    
+    // Try direct first
+    ret = sqlite3_step(stmt);
+    if (ret != SQLITE_BUSY && ret != SQLITE_LOCKED) return ret;
+    
     int max_seconds = kMaxRetrySeconds;
-	while (max_seconds > 0) {
-		IPOfflineQueueDebugLog(@"[IPOfflineQueue] SQLITE BUSY - retrying...");
-		sleep(1);
-		max_seconds--;
-		ret = sqlite3_step(stmt);
-		if (ret != SQLITE_BUSY && ret != SQLITE_LOCKED) return ret;
-	}
+    while (max_seconds > 0) {
+        IPOfflineQueueDebugLog(@"[IPOfflineQueue] SQLITE BUSY - retrying...");
+        sleep(1);
+        max_seconds--;
+        ret = sqlite3_step(stmt);
+        if (ret != SQLITE_BUSY && ret != SQLITE_LOCKED) return ret;
+    }
     
-	[[NSException exceptionWithName:@"IPOfflineQueueDatabaseException" 
-		reason:@"SQLITE BUSY for too long" userInfo:nil
-	] raise];
+    [[NSException exceptionWithName:@"IPOfflineQueueDatabaseException" 
+        reason:@"SQLITE BUSY for too long" userInfo:nil
+    ] raise];
     
-	return ret;
+    return ret;
 }
 
 - (void)executeRawQuery:(NSString *)query
 {
     const char *query_cstr = [query cStringUsingEncoding:NSUTF8StringEncoding];
-	int ret = sqlite3_exec(db, query_cstr, NULL, NULL, NULL);
-	if (ret != SQLITE_BUSY && ret != SQLITE_LOCKED) return;
+    int ret = sqlite3_exec(db, query_cstr, NULL, NULL, NULL);
+    if (ret != SQLITE_BUSY && ret != SQLITE_LOCKED) return;
 
-	IPOfflineQueueDebugLog(@"[IPOfflineQueue] SQLITE BUSY - retrying...");
-	[NSThread sleepForTimeInterval:0.1];
-	ret = sqlite3_exec(db, query_cstr, NULL, NULL, NULL);
-	if (ret != SQLITE_BUSY && ret != SQLITE_LOCKED) return;
-	
+    IPOfflineQueueDebugLog(@"[IPOfflineQueue] SQLITE BUSY - retrying...");
+    [NSThread sleepForTimeInterval:0.1];
+    ret = sqlite3_exec(db, query_cstr, NULL, NULL, NULL);
+    if (ret != SQLITE_BUSY && ret != SQLITE_LOCKED) return;
+    
     int max_seconds = kMaxRetrySeconds;
-	while (max_seconds > 0) {
-		IPOfflineQueueDebugLog(@"[IPOfflineQueue] SQLITE BUSY - retrying in 1 second...");
-		
-		sleep(1);
-		max_seconds--;
+    while (max_seconds > 0) {
+        IPOfflineQueueDebugLog(@"[IPOfflineQueue] SQLITE BUSY - retrying in 1 second...");
+        
+        sleep(1);
+        max_seconds--;
         ret = sqlite3_exec(db, query_cstr, NULL, NULL, NULL);
-		if (ret != SQLITE_BUSY && ret != SQLITE_LOCKED) return;
-	}
+        if (ret != SQLITE_BUSY && ret != SQLITE_LOCKED) return;
+    }
 
-	[[NSException exceptionWithName:@"IPOfflineQueueDatabaseException" 
-		reason:@"SQLITE BUSY for too long" userInfo:nil
-	] raise];
+    [[NSException exceptionWithName:@"IPOfflineQueueDatabaseException" 
+        reason:@"SQLITE BUSY for too long" userInfo:nil
+    ] raise];
 }
 
 #pragma mark - Initialization and schema management
@@ -109,7 +109,7 @@ static NSMutableDictionary *_activeQueues = nil;
         @synchronized([self class]) {
             if (_activeQueues) {
                 if ([_activeQueues objectForKey:n]) {
-               		[[NSException exceptionWithName:@"IPOfflineQueueDuplicateNameException" 
+                    [[NSException exceptionWithName:@"IPOfflineQueueDuplicateNameException" 
                         reason:[NSString stringWithFormat:@"[IPOfflineQueue] Queue already exists with name: %@", n] userInfo:nil
                     ] raise];
                 }
@@ -126,11 +126,11 @@ static NSMutableDictionary *_activeQueues = nil;
         name = [n retain];
         self.delegate = d;
         
-   		NSString *dbPath = [[NSSearchPathForDirectoriesInDomains(NSCachesDirectory, NSUserDomainMask, YES) objectAtIndex:0] stringByAppendingPathComponent:
+        NSString *dbPath = [[NSSearchPathForDirectoriesInDomains(NSCachesDirectory, NSUserDomainMask, YES) objectAtIndex:0] stringByAppendingPathComponent:
             [NSString stringWithFormat:@"%@.queue", n]
         ];
         
-       	if (sqlite3_open([dbPath cStringUsingEncoding:NSUTF8StringEncoding], &db) != SQLITE_OK) {
+        if (sqlite3_open([dbPath cStringUsingEncoding:NSUTF8StringEncoding], &db) != SQLITE_OK) {
             [[NSException exceptionWithName:@"IPOfflineQueueDatabaseException" 
                 reason:@"Failed to open database" userInfo:nil
             ] raise];
@@ -156,10 +156,10 @@ static NSMutableDictionary *_activeQueues = nil;
         updateThreadPausedLock = [[NSConditionLock alloc] initWithCondition:0];
         updateThreadTerminatingLock = [[NSConditionLock alloc] initWithCondition:0];
 
-		[[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(tryToAutoResume) name:@"kNetworkReachabilityChangedNotification" object:nil];
-		[[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(tryToAutoResume) name:UIApplicationDidBecomeActiveNotification object:nil];
-		[[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(syncInserts) name:UIApplicationWillResignActiveNotification object:nil];
-		[[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(halt) name:UIApplicationWillTerminateNotification object:nil];
+        [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(tryToAutoResume) name:@"kNetworkReachabilityChangedNotification" object:nil];
+        [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(tryToAutoResume) name:UIApplicationDidBecomeActiveNotification object:nil];
+        [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(syncInserts) name:UIApplicationWillResignActiveNotification object:nil];
+        [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(halt) name:UIApplicationWillTerminateNotification object:nil];
         
         [NSThread detachNewThreadSelector:@selector(queueThreadMain:) toTarget:self withObject:nil];
     }
@@ -268,7 +268,7 @@ static NSMutableDictionary *_activeQueues = nil;
             application.applicationState == UIApplicationStateBackground
         )
     ) {
-		backgroundTaskIdentifier = [application beginBackgroundTaskWithExpirationHandler:^{ }];
+        backgroundTaskIdentifier = [application beginBackgroundTaskWithExpirationHandler:^{ }];
     }
     
     dispatch_sync(insertQueue, ^{ });
@@ -282,9 +282,10 @@ static NSMutableDictionary *_activeQueues = nil;
 {
     if (autoResumeInterval == newInterval) return;
     autoResumeInterval = newInterval;
-
-    @synchronized(self) {
-        if ([NSThread isMainThread]) {
+    
+    // Ensure that this always runs on the main thread for simple timer scheduling
+    dispatch_async(dispatch_get_main_queue(), ^{
+        @synchronized(self) {
             if (autoResumeTimer) {
                 [autoResumeTimer invalidate];
                 [autoResumeTimer release];
@@ -295,21 +296,8 @@ static NSMutableDictionary *_activeQueues = nil;
             } else {
                 autoResumeTimer = nil;
             }
-        } else {
-            dispatch_sync(dispatch_get_main_queue(), ^{
-                if (autoResumeTimer) {
-                    [autoResumeTimer invalidate];
-                    [autoResumeTimer release];
-                }
-
-                if (newInterval > 0) {
-                    autoResumeTimer = [[NSTimer scheduledTimerWithTimeInterval:newInterval target:self selector:@selector(autoResumeTimerFired:) userInfo:nil repeats:YES] retain];
-                } else {
-                    autoResumeTimer = nil;
-                }
-            });
         }
-    }
+    });
 }
 
 #pragma mark - Queue thread
@@ -364,7 +352,7 @@ static NSMutableDictionary *_activeQueues = nil;
             }
             
             // Some other error
-           	[[NSException exceptionWithName:@"IPOfflineQueueDatabaseException" 
+            [[NSException exceptionWithName:@"IPOfflineQueueDatabaseException" 
                 reason:@"Failed to select next queued item" userInfo:nil
             ] raise];
         }        
