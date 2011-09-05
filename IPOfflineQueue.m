@@ -316,12 +316,12 @@ static NSMutableDictionary *_activeQueues = nil;
     UIApplication *application = [UIApplication sharedApplication];
     UIBackgroundTaskIdentifier backgroundTaskIdentifier = UIBackgroundTaskInvalid;
     
-    if ([UIDevice currentDevice].multitaskingSupported && (
-            application.applicationState == UIApplicationStateInactive ||
-            application.applicationState == UIApplicationStateBackground
-        )
+    if (application.applicationState == UIApplicationStateInactive ||
+        application.applicationState == UIApplicationStateBackground
     ) {
-        backgroundTaskIdentifier = [application beginBackgroundTaskWithExpirationHandler:^{ }];
+		backgroundTaskIdentifier = [application beginBackgroundTaskWithExpirationHandler:^{ 
+            if (backgroundTaskIdentifier != UIBackgroundTaskInvalid) [application endBackgroundTask:backgroundTaskIdentifier];
+        }];
     }
     
     dispatch_sync(insertQueue, ^{ });
@@ -360,7 +360,6 @@ static NSMutableDictionary *_activeQueues = nil;
     NSAutoreleasePool *threadPool = [[NSAutoreleasePool alloc] init];
 
     UIApplication *application = [UIApplication sharedApplication];
-    BOOL canMultitask = [UIDevice currentDevice].multitaskingSupported;
     UIBackgroundTaskIdentifier backgroundTaskIdentifier = UIBackgroundTaskInvalid;
     sqlite3_stmt *selectStmt = NULL;
     sqlite3_stmt *deleteStmt = NULL;
@@ -375,7 +374,9 @@ static NSMutableDictionary *_activeQueues = nil;
     while (! halt) {    
         NSAutoreleasePool *loopPool = [[NSAutoreleasePool alloc] init];
 
-        if (canMultitask) backgroundTaskIdentifier = [application beginBackgroundTaskWithExpirationHandler:^{ }];
+        backgroundTaskIdentifier = [application beginBackgroundTaskWithExpirationHandler:^{ 
+            if (backgroundTaskIdentifier != UIBackgroundTaskInvalid) [application endBackgroundTask:backgroundTaskIdentifier];
+        }];
 
         [updateThreadPausedLock lockWhenCondition:0];
         if (halt) {
