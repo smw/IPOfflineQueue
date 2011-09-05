@@ -235,7 +235,7 @@ static NSMutableDictionary *_activeQueues = nil;
     });
 }
 
-- (void)filterActionsUsingBlock:(IPFilterBlock)filterBlock
+- (void)filterActionsUsingBlock:(IPOfflineQueueFilterBlock)filterBlock
 {
     // This is intentionally fuzzy and its deletions are not guaranteed (not protected from race conditions).
     // The idea is, for instance, for redundant requests not to be executed, such as "update list from server".

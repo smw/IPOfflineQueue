@@ -46,9 +46,9 @@ typedef enum {
 typedef enum {
     IPOfflineQueueFilterResultAttemptToDelete = 0,
     IPOfflineQueueFilterResultNoChange
-} IPFilterResult;
+} IPOfflineQueueFilterResult;
 
-typedef IPFilterResult (^IPFilterBlock)(NSDictionary *userInfo);
+typedef IPOfflineQueueFilterResult (^IPOfflineQueueFilterBlock)(NSDictionary *userInfo);
 
 @class IPOfflineQueue;
 
@@ -106,7 +106,7 @@ typedef IPFilterResult (^IPFilterBlock)(NSDictionary *userInfo);
 // it should only be used to remove requests that won't have negative side effects if they're still performed,
 // such as read-only requests.
 //
-- (void)filterActionsUsingBlock:(IPFilterBlock)filterBlock;
+- (void)filterActionsUsingBlock:(IPOfflineQueueFilterBlock)filterBlock;
 
 
 @property (nonatomic, retain) id<IPOfflineQueueDelegate> delegate;

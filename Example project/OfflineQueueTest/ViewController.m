@@ -70,7 +70,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 - (IBAction)filterQueueButtonTapped:(id)sender
 {
     // Delete odd-numbered tasks
-    [self.queue filterActionsUsingBlock:^IPFilterResult(NSDictionary *userInfo) {
+    [self.queue filterActionsUsingBlock:^IPOfflineQueueFilterResult(NSDictionary *userInfo) {
         int taskID = [[[userInfo objectForKey:@"taskID"] substringFromIndex:4] intValue];
         if (taskID % 2 == 1) {
             return IPOfflineQueueFilterResultAttemptToDelete;
