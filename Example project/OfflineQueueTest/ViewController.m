@@ -62,9 +62,22 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
     lastTaskID += 10;
 }
 
-- (IBAction)emptyQueueButtonTapped:(id)sender
+- (IBAction)clearQueueButtonTapped:(id)sender
 {
     [self.queue clear];
+}
+
+- (IBAction)filterQueueButtonTapped:(id)sender
+{
+    // Delete odd-numbered tasks
+    [self.queue filterActionsUsingBlock:^IPFilterResult(NSDictionary *userInfo) {
+        int taskID = [[[userInfo objectForKey:@"taskID"] substringFromIndex:4] intValue];
+        if (taskID % 2 == 1) {
+            return IPOfflineQueueFilterResultAttemptToDelete;
+        } else {
+            return IPOfflineQueueFilterResultNoChange;
+        }
+    }];
 }
 
 - (IBAction)releaseQueueButtonTapped:(id)sender

@@ -235,6 +235,59 @@ static NSMutableDictionary *_activeQueues = nil;
     });
 }
 
+- (void)filterActionsUsingBlock:(IPFilterBlock)filterBlock
+{
+    // This is intentionally fuzzy and its deletions are not guaranteed (not protected from race conditions).
+    // The idea is, for instance, for redundant requests not to be executed, such as "update list from server".
+    // Obviously, multiple updates all in a row are redundant, but you also want to be able to queue them
+    // periodically without worrying that a bunch are already in the queue.
+    //
+    // With this simple, quick-and-dirty method, you can e.g. delete any existing "update" requests before
+    // adding a new one.
+
+    dispatch_async(insertQueue, ^{
+        sqlite3_stmt *selectStmt = NULL;
+        sqlite3_stmt *deleteStmt = NULL;
+        
+        if (sqlite3_prepare_v2(db, "SELECT ROWID, params FROM queue ORDER BY ROWID", -1, &selectStmt, NULL) != SQLITE_OK) {
+            [[NSException exceptionWithName:@"IPOfflineQueueDatabaseException" 
+                                     reason:@"Failed to prepare queue-item-filter-loop statement" userInfo:nil
+              ] raise];
+        }
+        
+        int queryResult;
+
+        while ( (queryResult = [self stepQuery:selectStmt]) == SQLITE_ROW) {
+            sqlite_uint64 rowid = sqlite3_column_int64(selectStmt, 0);
+            NSData *blobData = [NSData dataWithBytes:sqlite3_column_blob(selectStmt, 1) length:sqlite3_column_bytes(selectStmt, 1)];
+            
+            NSKeyedUnarchiver *unarchiver = [[NSKeyedUnarchiver alloc] initForReadingWithData:blobData];
+            NSDictionary *userInfo = [unarchiver decodeObjectForKey:@"userInfo"];
+            [unarchiver finishDecoding];
+            [unarchiver release];
+            
+            if (filterBlock(userInfo) == IPOfflineQueueFilterResultAttemptToDelete) {
+                if (! deleteStmt && sqlite3_prepare_v2(db, "DELETE FROM queue WHERE ROWID = ?", -1, &deleteStmt, NULL) != SQLITE_OK) {
+                    [[NSException exceptionWithName:@"IPOfflineQueueDatabaseException" 
+                                             reason:@"Failed to prepare queue-item-delete statement from filter" userInfo:nil
+                    ] raise];
+                }
+                
+                sqlite3_bind_int64(deleteStmt, 1, rowid);
+                if ([self stepQuery:deleteStmt] != SQLITE_DONE) {
+                    [[NSException exceptionWithName:@"IPOfflineQueueDatabaseException" 
+                                             reason:@"Failed to delete queued item after execution from filter" userInfo:nil
+                    ] raise];
+                }
+                sqlite3_reset(deleteStmt);
+            }
+        }
+        
+        sqlite3_finalize(selectStmt);
+        if (deleteStmt) sqlite3_finalize(deleteStmt);
+    });
+}
+
 - (void)clear
 {
     dispatch_sync(insertQueue, ^{

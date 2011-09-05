@@ -39,7 +39,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 - (IBAction)queueRunningSwitchChanged:(UISwitch *)sender;
 - (IBAction)enqueueMoreTasksButtonTapped:(id)sender;
-- (IBAction)emptyQueueButtonTapped:(id)sender;
+- (IBAction)clearQueueButtonTapped:(id)sender;
+- (IBAction)filterQueueButtonTapped:(id)sender;
 - (IBAction)releaseQueueButtonTapped:(id)sender;
 - (IBAction)newQueueButtonTapped:(id)sender;
 - (IBAction)enableTimerButtonTapped:(UIButton *)sender;

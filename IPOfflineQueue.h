@@ -43,6 +43,13 @@ typedef enum {
    IPOfflineQueueResultFailureShouldPauseQueue
 } IPOfflineQueueResult;
 
+typedef enum {
+    IPOfflineQueueFilterResultAttemptToDelete = 0,
+    IPOfflineQueueFilterResultNoChange
+} IPFilterResult;
+
+typedef IPFilterResult (^IPFilterBlock)(NSDictionary *userInfo);
+
 @class IPOfflineQueue;
 
 
@@ -86,6 +93,21 @@ typedef enum {
 - (void)pause;
 - (void)resume;
 - (void)clear;
+
+// This is intentionally fuzzy and its deletions are not guaranteed (not protected from race conditions).
+// The idea is, for instance, for redundant requests not to be executed, such as "get list from server".
+// Obviously, multiple updates all in a row are redundant, but you also want to be able to queue them
+// periodically without worrying that a bunch are already in the queue.
+//
+// With this simple, quick-and-dirty method, you can e.g. delete any existing "get list" requests before
+// adding a new one.
+//
+// But since it does not guarantee that any filtered-out commands won't execute (or finish current executions),
+// it should only be used to remove requests that won't have negative side effects if they're still performed,
+// such as read-only requests.
+//
+- (void)filterActionsUsingBlock:(IPFilterBlock)filterBlock;
+
 
 @property (nonatomic, retain) id<IPOfflineQueueDelegate> delegate;
 @property (nonatomic, readonly) NSString *name;
