@@ -79,6 +79,7 @@ typedef IPOfflineQueueFilterResult (^IPOfflineQueueFilterBlock)(NSDictionary *us
     NSTimer *autoResumeTimer;
     BOOL halt;
     BOOL halted;
+    BOOL respondToReachabilityChanges;
 }
 
 // name must be unique among all current queue instances, and must be valid as part of a filename, e.g. "downloads" or "main"
@@ -112,5 +113,6 @@ typedef IPOfflineQueueFilterResult (^IPOfflineQueueFilterBlock)(NSDictionary *us
 @property (nonatomic, retain) id<IPOfflineQueueDelegate> delegate;
 @property (nonatomic, readonly) NSString *name;
 @property (nonatomic, assign) NSTimeInterval autoResumeInterval;
+@property (nonatomic, assign) BOOL respondToReachabilityChanges;
 
 @end

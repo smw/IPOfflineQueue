@@ -49,6 +49,7 @@ static NSMutableDictionary *_activeQueues = nil;
 @implementation IPOfflineQueue
 @synthesize delegate;
 @synthesize name;
+@synthesize respondToReachabilityChanges;
 
 #pragma mark - SQLite utilities
 
@@ -123,6 +124,7 @@ static NSMutableDictionary *_activeQueues = nil;
         halt = NO;
         halted = NO;
         autoResumeInterval = 0;
+        respondToReachabilityChanges = YES;
         name = [n retain];
         self.delegate = d;
         
@@ -156,7 +158,7 @@ static NSMutableDictionary *_activeQueues = nil;
         updateThreadPausedLock = [[NSConditionLock alloc] initWithCondition:0];
         updateThreadTerminatingLock = [[NSConditionLock alloc] initWithCondition:0];
 
-        [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(tryToAutoResume) name:@"kNetworkReachabilityChangedNotification" object:nil];
+        [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(tryToAutoResumeForReachability) name:@"kNetworkReachabilityChangedNotification" object:nil];
         [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(tryToAutoResume) name:UIApplicationDidBecomeActiveNotification object:nil];
         [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(syncInserts) name:UIApplicationWillResignActiveNotification object:nil];
         [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(halt) name:UIApplicationWillTerminateNotification object:nil];
@@ -181,6 +183,13 @@ static NSMutableDictionary *_activeQueues = nil;
     self.delegate = nil;
     [name release];
     [super dealloc];
+}
+
+- (void)tryToAutoResumeForReachability
+{
+    if (self.respondToReachabilityChanges) {
+        [self tryToAutoResume];
+    }
 }
 
 - (void)tryToAutoResume
