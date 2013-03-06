@@ -68,19 +68,21 @@ typedef IPOfflineQueueFilterResult (^IPOfflineQueueFilterBlock)(NSDictionary *us
 
 @end
 
-@interface IPOfflineQueue : NSObject {
-    NSString *name;
-    sqlite3 *db;
-    dispatch_queue_t insertQueue;
-    NSConditionLock *updateThreadEmptyLock;
-    NSConditionLock *updateThreadPausedLock;
-    NSConditionLock *updateThreadTerminatingLock;
-    NSTimeInterval autoResumeInterval;
-    NSTimer *autoResumeTimer;
-    BOOL halt;
-    BOOL halted;
-    BOOL respondToReachabilityChanges;
-}
+@interface IPOfflineQueue : NSObject
+
+@property (nonatomic, strong) id<IPOfflineQueueDelegate> delegate;
+@property (nonatomic, strong) NSString *name;
+@property (nonatomic, assign) NSTimeInterval autoResumeInterval;
+@property (nonatomic, assign) BOOL respondToReachabilityChanges;
+
+@property (atomic, strong) dispatch_queue_t insertQueue;
+@property (atomic, strong) NSConditionLock *updateThreadEmptyLock;
+@property (atomic, strong) NSConditionLock *updateThreadPausedLock;
+@property (atomic, strong) NSConditionLock *updateThreadTerminatingLock;
+@property (atomic, strong) NSTimer *autoResumeTimer;
+@property (atomic, assign) BOOL halt;
+@property (atomic, assign) BOOL halted;
+@property (atomic, assign) sqlite3 *db;
 
 // name must be unique among all current queue instances, and must be valid as part of a filename, e.g. "downloads" or "main"
 - (id)initWithName:(NSString *)name delegate:(id<IPOfflineQueueDelegate>)delegate;
@@ -108,11 +110,5 @@ typedef IPOfflineQueueFilterResult (^IPOfflineQueueFilterBlock)(NSDictionary *us
 // such as read-only requests.
 //
 - (void)filterActionsUsingBlock:(IPOfflineQueueFilterBlock)filterBlock;
-
-
-@property (nonatomic, retain) id<IPOfflineQueueDelegate> delegate;
-@property (nonatomic, readonly) NSString *name;
-@property (nonatomic, assign) NSTimeInterval autoResumeInterval;
-@property (nonatomic, assign) BOOL respondToReachabilityChanges;
 
 @end

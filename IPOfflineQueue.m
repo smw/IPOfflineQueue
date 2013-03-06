@@ -79,12 +79,12 @@ static NSMutableDictionary *_activeQueues = nil;
 - (void)executeRawQuery:(NSString *)query
 {
     const char *query_cstr = [query cStringUsingEncoding:NSUTF8StringEncoding];
-    int ret = sqlite3_exec(db, query_cstr, NULL, NULL, NULL);
+    int ret = sqlite3_exec(self.db, query_cstr, NULL, NULL, NULL);
     if (ret != SQLITE_BUSY && ret != SQLITE_LOCKED) return;
 
     IPOfflineQueueDebugLog(@"[IPOfflineQueue] SQLITE BUSY - retrying...");
     [NSThread sleepForTimeInterval:0.1];
-    ret = sqlite3_exec(db, query_cstr, NULL, NULL, NULL);
+    ret = sqlite3_exec(self.db, query_cstr, NULL, NULL, NULL);
     if (ret != SQLITE_BUSY && ret != SQLITE_LOCKED) return;
     
     int max_seconds = kMaxRetrySeconds;
@@ -93,7 +93,7 @@ static NSMutableDictionary *_activeQueues = nil;
         
         sleep(1);
         max_seconds--;
-        ret = sqlite3_exec(db, query_cstr, NULL, NULL, NULL);
+        ret = sqlite3_exec(self.db, query_cstr, NULL, NULL, NULL);
         if (ret != SQLITE_BUSY && ret != SQLITE_LOCKED) return;
     }
 
@@ -121,25 +121,25 @@ static NSMutableDictionary *_activeQueues = nil;
             }
         }
         
-        halt = NO;
-        halted = NO;
-        autoResumeInterval = 0;
-        respondToReachabilityChanges = YES;
-        name = [n retain];
+        self.halt = NO;
+        self.halted = NO;
+        self.autoResumeInterval = 0;
+        self.respondToReachabilityChanges = YES;
+        self.name = [n retain];
         self.delegate = d;
         
         NSString *dbPath = [[NSSearchPathForDirectoriesInDomains(NSCachesDirectory, NSUserDomainMask, YES) objectAtIndex:0] stringByAppendingPathComponent:
             [NSString stringWithFormat:@"%@.queue", n]
         ];
         
-        if (sqlite3_open([dbPath cStringUsingEncoding:NSUTF8StringEncoding], &db) != SQLITE_OK) {
+        if (sqlite3_open([dbPath cStringUsingEncoding:NSUTF8StringEncoding], &_db) != SQLITE_OK) {
             [[NSException exceptionWithName:@"IPOfflineQueueDatabaseException" 
                 reason:@"Failed to open database" userInfo:nil
             ] raise];
         }
 
         sqlite3_stmt *stmt;
-        if (sqlite3_prepare_v2(db, "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'queue'", -1, &stmt, NULL) != SQLITE_OK) {
+        if (sqlite3_prepare_v2(self.db, "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'queue'", -1, &stmt, NULL) != SQLITE_OK) {
             [[NSException exceptionWithName:@"IPOfflineQueueDatabaseException" 
                 reason:@"Failed to read table info from database" userInfo:nil
             ] raise];
@@ -153,10 +153,10 @@ static NSMutableDictionary *_activeQueues = nil;
             [self executeRawQuery:@"CREATE TABLE queue (params BLOB NOT NULL)"];
         }
         
-        insertQueue = dispatch_queue_create([[NSString stringWithFormat:@"%@-ipofflinequeue-inserts", n] UTF8String], 0);
-        updateThreadEmptyLock = [[NSConditionLock alloc] initWithCondition:0];
-        updateThreadPausedLock = [[NSConditionLock alloc] initWithCondition:0];
-        updateThreadTerminatingLock = [[NSConditionLock alloc] initWithCondition:0];
+        self.insertQueue = dispatch_queue_create([[NSString stringWithFormat:@"%@-ipofflinequeue-inserts", n] UTF8String], 0);
+        self.updateThreadEmptyLock = [[NSConditionLock alloc] initWithCondition:0];
+        self.updateThreadPausedLock = [[NSConditionLock alloc] initWithCondition:0];
+        self.updateThreadTerminatingLock = [[NSConditionLock alloc] initWithCondition:0];
 
         [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(tryToAutoResumeForReachability) name:@"kNetworkReachabilityChangedNotification" object:nil];
         [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(tryToAutoResume) name:UIApplicationDidBecomeActiveNotification object:nil];
@@ -170,18 +170,18 @@ static NSMutableDictionary *_activeQueues = nil;
 
 - (void)dealloc
 {
-    [self halt];
+    [self doHalt];
 
     IPOfflineQueueDebugLog(@"queue dealloc: cleaning up");
-    sqlite3_close(db);
-    [updateThreadEmptyLock release];
-    [updateThreadPausedLock release];
-    [updateThreadTerminatingLock release];
+    sqlite3_close(self.db);
+    [self.updateThreadEmptyLock release];
+    [self.updateThreadPausedLock release];
+    [self.updateThreadTerminatingLock release];
 
     @synchronized([self class]) { [_activeQueues removeObjectForKey:self.name]; }
     
     self.delegate = nil;
-    [name release];
+    [self.name release];
     [super dealloc];
 }
 
@@ -224,7 +224,7 @@ static NSMutableDictionary *_activeQueues = nil;
         [archiver release];
 
         sqlite3_stmt *stmt;
-        if (sqlite3_prepare_v2(db, "INSERT INTO queue (params) VALUES (?)", -1, &stmt, NULL) != SQLITE_OK) {
+        if (sqlite3_prepare_v2(self.db, "INSERT INTO queue (params) VALUES (?)", -1, &stmt, NULL) != SQLITE_OK) {
             [[NSException exceptionWithName:@"IPOfflineQueueDatabaseException" 
                 reason:@"Failed to prepare enqueue-insert statement" userInfo:nil
             ] raise];
@@ -258,7 +258,7 @@ static NSMutableDictionary *_activeQueues = nil;
         sqlite3_stmt *selectStmt = NULL;
         sqlite3_stmt *deleteStmt = NULL;
         
-        if (sqlite3_prepare_v2(db, "SELECT ROWID, params FROM queue ORDER BY ROWID", -1, &selectStmt, NULL) != SQLITE_OK) {
+        if (sqlite3_prepare_v2(self.db, "SELECT ROWID, params FROM queue ORDER BY ROWID", -1, &selectStmt, NULL) != SQLITE_OK) {
             [[NSException exceptionWithName:@"IPOfflineQueueDatabaseException" 
                                      reason:@"Failed to prepare queue-item-filter-loop statement" userInfo:nil
               ] raise];
@@ -276,7 +276,7 @@ static NSMutableDictionary *_activeQueues = nil;
             [unarchiver release];
             
             if (filterBlock(userInfo) == IPOfflineQueueFilterResultAttemptToDelete) {
-                if (! deleteStmt && sqlite3_prepare_v2(db, "DELETE FROM queue WHERE ROWID = ?", -1, &deleteStmt, NULL) != SQLITE_OK) {
+                if (! deleteStmt && sqlite3_prepare_v2(self.db, "DELETE FROM queue WHERE ROWID = ?", -1, &deleteStmt, NULL) != SQLITE_OK) {
                     [[NSException exceptionWithName:@"IPOfflineQueueDatabaseException" 
                                              reason:@"Failed to prepare queue-item-delete statement from filter" userInfo:nil
                     ] raise];
@@ -348,15 +348,15 @@ static NSMutableDictionary *_activeQueues = nil;
     // Ensure that this always runs on the main thread for simple timer scheduling
     dispatch_async(dispatch_get_main_queue(), ^{
         @synchronized(self) {
-            if (autoResumeTimer) {
-                [autoResumeTimer invalidate];
-                [autoResumeTimer release];
+            if (self.autoResumeTimer) {
+                [self.autoResumeTimer invalidate];
+                [self.autoResumeTimer release];
             }
 
             if (newInterval > 0) {
-                autoResumeTimer = [[NSTimer scheduledTimerWithTimeInterval:newInterval target:self selector:@selector(autoResumeTimerFired:) userInfo:nil repeats:YES] retain];
+                self.autoResumeTimer = [[NSTimer scheduledTimerWithTimeInterval:newInterval target:self selector:@selector(autoResumeTimerFired:) userInfo:nil repeats:YES] retain];
             } else {
-                autoResumeTimer = nil;
+                self.autoResumeTimer = nil;
             }
         }
     });
@@ -374,13 +374,13 @@ static NSMutableDictionary *_activeQueues = nil;
     sqlite3_stmt *deleteStmt = NULL;
     int queryResult;
 
-    if (sqlite3_prepare_v2(db, "SELECT ROWID, params FROM queue ORDER BY ROWID LIMIT 1", -1, &selectStmt, NULL) != SQLITE_OK) {
+    if (sqlite3_prepare_v2(self.db, "SELECT ROWID, params FROM queue ORDER BY ROWID LIMIT 1", -1, &selectStmt, NULL) != SQLITE_OK) {
         [[NSException exceptionWithName:@"IPOfflineQueueDatabaseException" 
             reason:@"Failed to prepare queue-item-select statement" userInfo:nil
         ] raise];
     }
     
-    while (! halt) {    
+    while (! self.halt) {    
         NSAutoreleasePool *loopPool = [[NSAutoreleasePool alloc] init];
 
         backgroundTaskIdentifier = [application beginBackgroundTaskWithExpirationHandler:^{ 
@@ -388,7 +388,7 @@ static NSMutableDictionary *_activeQueues = nil;
         }];
 
         [updateThreadPausedLock lockWhenCondition:0];
-        if (halt) {
+        if (self.halt) {
             [updateThreadPausedLock unlock];
             if (backgroundTaskIdentifier != UIBackgroundTaskInvalid) [application endBackgroundTask:backgroundTaskIdentifier];
             [loopPool drain];
@@ -397,14 +397,14 @@ static NSMutableDictionary *_activeQueues = nil;
         [updateThreadPausedLock unlock];
         
         [updateThreadEmptyLock lockWhenCondition:0];
-        if (halt) {
+        if (self.halt) {
             [updateThreadEmptyLock unlock];
             if (backgroundTaskIdentifier != UIBackgroundTaskInvalid) [application endBackgroundTask:backgroundTaskIdentifier];
             [loopPool drain];
             break;
         }
         
-        if ( (queryResult = [self stepQuery:selectStmt]) != SQLITE_ROW) {
+        if ((queryResult = [self stepQuery:selectStmt]) != SQLITE_ROW) {
             if (queryResult == SQLITE_DONE) {
                 // No more queued items
                 sqlite3_reset(selectStmt);
@@ -440,7 +440,7 @@ static NSMutableDictionary *_activeQueues = nil;
 
         IPOfflineQueueResult result = [self.delegate offlineQueue:self executeActionWithUserInfo:userInfo];
         if (result == IPOfflineQueueResultSuccess) {
-            if (! deleteStmt && sqlite3_prepare_v2(db, "DELETE FROM queue WHERE ROWID = ?", -1, &deleteStmt, NULL) != SQLITE_OK) {
+            if (! deleteStmt && sqlite3_prepare_v2(self.db, "DELETE FROM queue WHERE ROWID = ?", -1, &deleteStmt, NULL) != SQLITE_OK) {
                 [[NSException exceptionWithName:@"IPOfflineQueueDatabaseException" 
                     reason:@"Failed to prepare queue-item-delete statement" userInfo:nil
                 ] raise];
@@ -476,24 +476,24 @@ static NSMutableDictionary *_activeQueues = nil;
     [threadPool drain];
 }
 
-- (void)halt
+- (void)doHalt
 {
     @synchronized(self) {
-        if (halted) return;
-        halted = YES;
+        if (self.halted) return;
+        self.halted = YES;
 
         if ([NSThread isMainThread]) {
-            if (autoResumeTimer) {
-                [autoResumeTimer invalidate];
-                [autoResumeTimer release];
-                autoResumeTimer = nil;
+            if (self.autoResumeTimer) {
+                [self.autoResumeTimer invalidate];
+                [self.autoResumeTimer release];
+                self.autoResumeTimer = nil;
             }    
         } else {
             dispatch_sync(dispatch_get_main_queue(), ^{
-                if (autoResumeTimer) {
-                    [autoResumeTimer invalidate];
-                    [autoResumeTimer release];
-                    autoResumeTimer = nil;
+                if (self.autoResumeTimer) {
+                    [self.autoResumeTimer invalidate];
+                    [self.autoResumeTimer release];
+                    self.autoResumeTimer = nil;
                 }
             });
         }
@@ -503,22 +503,22 @@ static NSMutableDictionary *_activeQueues = nil;
     [[NSNotificationCenter defaultCenter] removeObserver:self name:UIApplicationDidBecomeActiveNotification object:nil];    
     [[NSNotificationCenter defaultCenter] removeObserver:self name:UIApplicationWillResignActiveNotification object:nil];
     [[NSNotificationCenter defaultCenter] removeObserver:self name:@"kNetworkReachabilityChangedNotification" object:nil];    
-    halt = YES;
+    self.halt = YES;
     
     // Sync inserts
     [self syncInserts];
-    dispatch_release(insertQueue);
+    dispatch_release(self.insertQueue);
 
     IPOfflineQueueDebugLog(@"halt: halting exec thread");
     // Halt queue-execution thread
     halt = YES;
-    [updateThreadPausedLock lock];
-    [updateThreadPausedLock unlockWithCondition:0];
-    [updateThreadEmptyLock lock];
-    [updateThreadEmptyLock unlockWithCondition:0];
+    [self.updateThreadPausedLock lock];
+    [self.updateThreadPausedLock unlockWithCondition:0];
+    [self.updateThreadEmptyLock lock];
+    [self.updateThreadEmptyLock unlockWithCondition:0];
     
-    [updateThreadTerminatingLock lockWhenCondition:1];
-    [updateThreadTerminatingLock unlock];
+    [self.updateThreadTerminatingLock lockWhenCondition:1];
+    [self.updateThreadTerminatingLock unlock];
     
     IPOfflineQueueDebugLog(@"halt: done");
 }
