@@ -35,6 +35,10 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
 #import "IPOfflineQueue.h"
+
+#import "Reachability.h"
+
+
 #define kMaxRetrySeconds 10
 
 // Debug logging: change to #if 1 to enable
@@ -158,7 +162,7 @@ static NSMutableDictionary *_activeQueues = nil;
         self.updateThreadPausedLock = [[NSConditionLock alloc] initWithCondition:0];
         self.updateThreadTerminatingLock = [[NSConditionLock alloc] initWithCondition:0];
 
-        [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(tryToAutoResumeForReachability) name:@"kNetworkReachabilityChangedNotification" object:nil];
+        [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(tryToAutoResumeForReachability) name:kReachabilityChangedNotification object:nil];
         [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(tryToAutoResume) name:UIApplicationDidBecomeActiveNotification object:nil];
         [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(syncInserts) name:UIApplicationWillResignActiveNotification object:nil];
         [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(halt) name:UIApplicationWillTerminateNotification object:nil];
@@ -491,7 +495,7 @@ static NSMutableDictionary *_activeQueues = nil;
     [[NSNotificationCenter defaultCenter] removeObserver:self name:UIApplicationWillTerminateNotification object:nil];    
     [[NSNotificationCenter defaultCenter] removeObserver:self name:UIApplicationDidBecomeActiveNotification object:nil];    
     [[NSNotificationCenter defaultCenter] removeObserver:self name:UIApplicationWillResignActiveNotification object:nil];
-    [[NSNotificationCenter defaultCenter] removeObserver:self name:@"kNetworkReachabilityChangedNotification" object:nil];    
+    [[NSNotificationCenter defaultCenter] removeObserver:self name:kReachabilityChangedNotification object:nil];    
     self.halt = YES;
     
     // Sync inserts
