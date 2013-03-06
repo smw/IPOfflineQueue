@@ -88,7 +88,7 @@ typedef IPOfflineQueueFilterResult (^IPOfflineQueueFilterBlock)(NSDictionary *us
 - (id)initWithName:(NSString *)name delegate:(id<IPOfflineQueueDelegate>)delegate;
 
 // owner MUST call halt before releasing, otherwise it'll stick around
-- (void)halt;
+- (void)doHalt;
 
 // userInfo must be serializable
 - (void)enqueueActionWithUserInfo:(NSDictionary *)userInfo;

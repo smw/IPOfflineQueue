@@ -125,7 +125,7 @@ static NSMutableDictionary *_activeQueues = nil;
         self.halted = NO;
         self.autoResumeInterval = 0;
         self.respondToReachabilityChanges = YES;
-        self.name = [n retain];
+        self.name = name;
         self.delegate = d;
         
         NSString *dbPath = [[NSSearchPathForDirectoriesInDomains(NSCachesDirectory, NSUserDomainMask, YES) objectAtIndex:0] stringByAppendingPathComponent:
@@ -174,15 +174,14 @@ static NSMutableDictionary *_activeQueues = nil;
 
     IPOfflineQueueDebugLog(@"queue dealloc: cleaning up");
     sqlite3_close(self.db);
-    [self.updateThreadEmptyLock release];
-    [self.updateThreadPausedLock release];
-    [self.updateThreadTerminatingLock release];
+    self.updateThreadEmptyLock = nil;
+    self.updateThreadPausedLock = nil;
+    self.updateThreadTerminatingLock = nil;
 
     @synchronized([self class]) { [_activeQueues removeObjectForKey:self.name]; }
     
     self.delegate = nil;
-    [self.name release];
-    [super dealloc];
+    self.name = nil;
 }
 
 - (void)tryToAutoResumeForReachability
@@ -194,13 +193,13 @@ static NSMutableDictionary *_activeQueues = nil;
 
 - (void)tryToAutoResume
 {
-    if ([updateThreadPausedLock condition] && 
+    if ([self.updateThreadPausedLock condition] && 
         (! self.delegate || [self.delegate offlineQueueShouldAutomaticallyResume:self])
     ) {
         // Don't want to block notification-handling, so dispatch this
         dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
-            [updateThreadPausedLock lock];
-            [updateThreadPausedLock unlockWithCondition:0];
+            [self.updateThreadPausedLock lock];
+            [self.updateThreadPausedLock unlockWithCondition:0];
         });
     }
 }
@@ -214,14 +213,14 @@ static NSMutableDictionary *_activeQueues = nil;
 {
     // This is done with GCD so queue-add operations return to the caller as quickly as possible.
     // Using the custom insertQueue ensures that actions are always inserted (and executed) in order.
-    
-    dispatch_async(insertQueue, ^{
-        [updateThreadEmptyLock lock];
+
+    dispatch_async(self.insertQueue, ^{
+        [self.updateThreadEmptyLock lock];
         NSMutableData *data = [[NSMutableData alloc] init];
         NSKeyedArchiver *archiver = [[NSKeyedArchiver alloc] initForWritingWithMutableData:data];
         [archiver encodeObject:userInfo forKey:@"userInfo"];
         [archiver finishEncoding];
-        [archiver release];
+        archiver = nil;
 
         sqlite3_stmt *stmt;
         if (sqlite3_prepare_v2(self.db, "INSERT INTO queue (params) VALUES (?)", -1, &stmt, NULL) != SQLITE_OK) {
@@ -238,9 +237,9 @@ static NSMutableDictionary *_activeQueues = nil;
         }
         sqlite3_finalize(stmt);
         
-        [data release];
+        data = nil;
         
-        [updateThreadEmptyLock unlockWithCondition:0];
+        [self.updateThreadEmptyLock unlockWithCondition:0];
     });
 }
 
@@ -254,7 +253,7 @@ static NSMutableDictionary *_activeQueues = nil;
     // With this simple, quick-and-dirty method, you can e.g. delete any existing "update" requests before
     // adding a new one.
 
-    dispatch_async(insertQueue, ^{
+    dispatch_async(self.insertQueue, ^{
         sqlite3_stmt *selectStmt = NULL;
         sqlite3_stmt *deleteStmt = NULL;
         
@@ -273,7 +272,7 @@ static NSMutableDictionary *_activeQueues = nil;
             NSKeyedUnarchiver *unarchiver = [[NSKeyedUnarchiver alloc] initForReadingWithData:blobData];
             NSDictionary *userInfo = [unarchiver decodeObjectForKey:@"userInfo"];
             [unarchiver finishDecoding];
-            [unarchiver release];
+            unarchiver = nil;
             
             if (filterBlock(userInfo) == IPOfflineQueueFilterResultAttemptToDelete) {
                 if (! deleteStmt && sqlite3_prepare_v2(self.db, "DELETE FROM queue WHERE ROWID = ?", -1, &deleteStmt, NULL) != SQLITE_OK) {
@@ -299,23 +298,23 @@ static NSMutableDictionary *_activeQueues = nil;
 
 - (void)clear
 {
-    dispatch_sync(insertQueue, ^{
-        [updateThreadEmptyLock lock];
+    dispatch_sync(self.insertQueue, ^{
+        [self.updateThreadEmptyLock lock];
         [self executeRawQuery:@"DELETE FROM queue"];
-        [updateThreadEmptyLock unlockWithCondition:1];
+        [self.updateThreadEmptyLock unlockWithCondition:1];
     });
 }
 
 - (void)pause
 {
-    [updateThreadPausedLock lock];
-    [updateThreadPausedLock unlockWithCondition:1];
+    [self.updateThreadPausedLock lock];
+    [self.updateThreadPausedLock unlockWithCondition:1];
 }
 
 - (void)resume
 {
-    [updateThreadPausedLock lock];
-    [updateThreadPausedLock unlockWithCondition:0];
+    [self.updateThreadPausedLock lock];
+    [self.updateThreadPausedLock unlockWithCondition:0];
 }
 
 - (void)syncInserts
@@ -333,28 +332,26 @@ static NSMutableDictionary *_activeQueues = nil;
         }];
     }
     
-    dispatch_sync(insertQueue, ^{ });
+    dispatch_sync(self.insertQueue, ^{ });
 
     if (backgroundTaskIdentifier != UIBackgroundTaskInvalid) [application endBackgroundTask:backgroundTaskIdentifier];
 }
 
-- (NSTimeInterval)autoResumeInterval { return autoResumeInterval; }
-
 - (void)setAutoResumeInterval:(NSTimeInterval)newInterval
 {
-    if (autoResumeInterval == newInterval) return;
-    autoResumeInterval = newInterval;
+    if (_autoResumeInterval == newInterval) return;
+    _autoResumeInterval = newInterval;
     
     // Ensure that this always runs on the main thread for simple timer scheduling
     dispatch_async(dispatch_get_main_queue(), ^{
         @synchronized(self) {
             if (self.autoResumeTimer) {
                 [self.autoResumeTimer invalidate];
-                [self.autoResumeTimer release];
+                self.autoResumeTimer = nil;
             }
 
             if (newInterval > 0) {
-                self.autoResumeTimer = [[NSTimer scheduledTimerWithTimeInterval:newInterval target:self selector:@selector(autoResumeTimerFired:) userInfo:nil repeats:YES] retain];
+                self.autoResumeTimer = [NSTimer scheduledTimerWithTimeInterval:newInterval target:self selector:@selector(autoResumeTimerFired:) userInfo:nil repeats:YES];
             } else {
                 self.autoResumeTimer = nil;
             }
@@ -366,7 +363,8 @@ static NSMutableDictionary *_activeQueues = nil;
 
 - (void)queueThreadMain:(id)userInfo
 {
-    NSAutoreleasePool *threadPool = [[NSAutoreleasePool alloc] init];
+   @autoreleasepool
+{
 
     UIApplication *application = [UIApplication sharedApplication];
     UIBackgroundTaskIdentifier backgroundTaskIdentifier = UIBackgroundTaskInvalid;
@@ -381,36 +379,31 @@ static NSMutableDictionary *_activeQueues = nil;
     }
     
     while (! self.halt) {    
-        NSAutoreleasePool *loopPool = [[NSAutoreleasePool alloc] init];
-
         backgroundTaskIdentifier = [application beginBackgroundTaskWithExpirationHandler:^{ 
             if (backgroundTaskIdentifier != UIBackgroundTaskInvalid) [application endBackgroundTask:backgroundTaskIdentifier];
         }];
 
-        [updateThreadPausedLock lockWhenCondition:0];
+        [self.updateThreadPausedLock lockWhenCondition:0];
         if (self.halt) {
-            [updateThreadPausedLock unlock];
+            [self.updateThreadPausedLock unlock];
             if (backgroundTaskIdentifier != UIBackgroundTaskInvalid) [application endBackgroundTask:backgroundTaskIdentifier];
-            [loopPool drain];
             break;
         }
-        [updateThreadPausedLock unlock];
+        [self.updateThreadPausedLock unlock];
         
-        [updateThreadEmptyLock lockWhenCondition:0];
+        [self.updateThreadEmptyLock lockWhenCondition:0];
         if (self.halt) {
-            [updateThreadEmptyLock unlock];
+            [self.updateThreadEmptyLock unlock];
             if (backgroundTaskIdentifier != UIBackgroundTaskInvalid) [application endBackgroundTask:backgroundTaskIdentifier];
-            [loopPool drain];
-            break;
+			break;
         }
         
         if ((queryResult = [self stepQuery:selectStmt]) != SQLITE_ROW) {
             if (queryResult == SQLITE_DONE) {
                 // No more queued items
                 sqlite3_reset(selectStmt);
-                [updateThreadEmptyLock unlockWithCondition:1];
+                [self.updateThreadEmptyLock unlockWithCondition:1];
                 if (backgroundTaskIdentifier != UIBackgroundTaskInvalid) [application endBackgroundTask:backgroundTaskIdentifier];
-                [loopPool drain];
                 continue;
             }
             
@@ -419,13 +412,12 @@ static NSMutableDictionary *_activeQueues = nil;
                 reason:@"Failed to select next queued item" userInfo:nil
             ] raise];
         }        
-        [updateThreadEmptyLock unlockWithCondition:0];
+        [self.updateThreadEmptyLock unlockWithCondition:0];
         
-        if ([updateThreadPausedLock condition]) {
+        if ([self.updateThreadPausedLock condition]) {
             // Updater was paused while it was waiting for the empty lock
             sqlite3_reset(selectStmt);
             if (backgroundTaskIdentifier != UIBackgroundTaskInvalid) [application endBackgroundTask:backgroundTaskIdentifier];
-            [loopPool drain];
             continue;
         }
 
@@ -436,7 +428,7 @@ static NSMutableDictionary *_activeQueues = nil;
         NSKeyedUnarchiver *unarchiver = [[NSKeyedUnarchiver alloc] initForReadingWithData:blobData];
         NSDictionary *userInfo = [unarchiver decodeObjectForKey:@"userInfo"];
         [unarchiver finishDecoding];
-        [unarchiver release];
+        unarchiver = nil;
 
         IPOfflineQueueResult result = [self.delegate offlineQueue:self executeActionWithUserInfo:userInfo];
         if (result == IPOfflineQueueResultSuccess) {
@@ -456,12 +448,11 @@ static NSMutableDictionary *_activeQueues = nil;
 
         } else if (result == IPOfflineQueueResultFailureShouldPauseQueue) {
             // Pause queue, retry action later
-            [updateThreadPausedLock lock];
-            [updateThreadPausedLock unlockWithCondition:1];
+            [self.updateThreadPausedLock lock];
+            [self.updateThreadPausedLock unlockWithCondition:1];
         }
 
         if (backgroundTaskIdentifier != UIBackgroundTaskInvalid) [application endBackgroundTask:backgroundTaskIdentifier];
-        [loopPool drain];
     }
     
     IPOfflineQueueDebugLog(@"Queue thread halting");
@@ -470,10 +461,10 @@ static NSMutableDictionary *_activeQueues = nil;
     if (selectStmt) sqlite3_finalize(selectStmt);
     if (deleteStmt) sqlite3_finalize(deleteStmt);
 
-    [updateThreadTerminatingLock lock];
-    [updateThreadTerminatingLock unlockWithCondition:1];
+    [self.updateThreadTerminatingLock lock];
+    [self.updateThreadTerminatingLock unlockWithCondition:1];
     
-    [threadPool drain];
+}
 }
 
 - (void)doHalt
@@ -485,14 +476,12 @@ static NSMutableDictionary *_activeQueues = nil;
         if ([NSThread isMainThread]) {
             if (self.autoResumeTimer) {
                 [self.autoResumeTimer invalidate];
-                [self.autoResumeTimer release];
                 self.autoResumeTimer = nil;
             }    
         } else {
             dispatch_sync(dispatch_get_main_queue(), ^{
                 if (self.autoResumeTimer) {
                     [self.autoResumeTimer invalidate];
-                    [self.autoResumeTimer release];
                     self.autoResumeTimer = nil;
                 }
             });
@@ -507,11 +496,11 @@ static NSMutableDictionary *_activeQueues = nil;
     
     // Sync inserts
     [self syncInserts];
-    dispatch_release(self.insertQueue);
+    //dispatch_release(self.insertQueue);
 
     IPOfflineQueueDebugLog(@"halt: halting exec thread");
     // Halt queue-execution thread
-    halt = YES;
+    self.halt = YES;
     [self.updateThreadPausedLock lock];
     [self.updateThreadPausedLock unlockWithCondition:0];
     [self.updateThreadEmptyLock lock];
