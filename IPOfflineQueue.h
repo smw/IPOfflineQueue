@@ -35,8 +35,11 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
 #import <Foundation/Foundation.h>
+#import <SystemConfiguration/SystemConfiguration.h>
 #import <dispatch/dispatch.h>
 #import <sqlite3.h>
+
+#define kReachabilityChangedNotification @"kNetworkReachabilityChangedNotification"
 
 typedef enum {
    IPOfflineQueueResultSuccess = 0,
@@ -75,7 +78,7 @@ typedef IPOfflineQueueFilterResult (^IPOfflineQueueFilterBlock)(NSDictionary *us
 @property (nonatomic, assign) NSTimeInterval autoResumeInterval;
 @property (nonatomic, assign) BOOL respondToReachabilityChanges;
 
-@property (atomic, strong) dispatch_queue_t insertQueue;
+@property () dispatch_queue_t insertQueue;
 @property (atomic, strong) NSConditionLock *updateThreadEmptyLock;
 @property (atomic, strong) NSConditionLock *updateThreadPausedLock;
 @property (atomic, strong) NSConditionLock *updateThreadTerminatingLock;

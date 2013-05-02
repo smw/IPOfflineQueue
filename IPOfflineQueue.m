@@ -36,7 +36,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #import "IPOfflineQueue.h"
 
-#import "Reachability.h"
+
 
 
 #define kMaxRetrySeconds 10
@@ -186,6 +186,7 @@ static NSMutableDictionary *_activeQueues = nil;
     
     self.delegate = nil;
     self.name = nil;
+    [super dealloc];
 }
 
 - (void)tryToAutoResumeForReachability

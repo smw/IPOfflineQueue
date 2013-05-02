@@ -15,6 +15,7 @@
 		A96B0DC7140D4E71007750B9 /* ViewController.xib in Resources */ = {isa = PBXBuildFile; fileRef = A96B0DC5140D4E71007750B9 /* ViewController.xib */; };
 		A96B0DD8140DB789007750B9 /* libsqlite3.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = A96B0DD7140DB789007750B9 /* libsqlite3.dylib */; };
 		A9B7B8E9140F3891009B3223 /* IPOfflineQueue.m in Sources */ = {isa = PBXBuildFile; fileRef = A9B7B8E8140F3891009B3223 /* IPOfflineQueue.m */; };
+		CBB1661B1732627000B92854 /* SystemConfiguration.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = CBB1661A1732627000B92854 /* SystemConfiguration.framework */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -32,6 +33,7 @@
 		A96B0DD7140DB789007750B9 /* libsqlite3.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libsqlite3.dylib; path = usr/lib/libsqlite3.dylib; sourceTree = SDKROOT; };
 		A9B7B8E7140F3891009B3223 /* IPOfflineQueue.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = IPOfflineQueue.h; path = ../IPOfflineQueue.h; sourceTree = "<group>"; };
 		A9B7B8E8140F3891009B3223 /* IPOfflineQueue.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; name = IPOfflineQueue.m; path = ../IPOfflineQueue.m; sourceTree = "<group>"; };
+		CBB1661A1732627000B92854 /* SystemConfiguration.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SystemConfiguration.framework; path = System/Library/Frameworks/SystemConfiguration.framework; sourceTree = SDKROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -39,6 +41,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				CBB1661B1732627000B92854 /* SystemConfiguration.framework in Frameworks */,
 				A96B0DD8140DB789007750B9 /* libsqlite3.dylib in Frameworks */,
 				A96B0DB3140D4E71007750B9 /* UIKit.framework in Frameworks */,
 				A96B0DB5140D4E71007750B9 /* Foundation.framework in Frameworks */,
@@ -51,6 +54,7 @@
 		A96B0DA3140D4E70007750B9 = {
 			isa = PBXGroup;
 			children = (
+				CBB1661A1732627000B92854 /* SystemConfiguration.framework */,
 				A96B0DCD140D4E7D007750B9 /* IPOfflineQueue */,
 				A96B0DB6140D4E71007750B9 /* OfflineQueueTest */,
 				A96B0DB1140D4E70007750B9 /* Frameworks */,
