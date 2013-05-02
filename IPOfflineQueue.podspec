@@ -1,7 +1,7 @@
 # spec by Matthew McCroskey: https://github.com/mmccroskey
 Pod::Spec.new do |s|
   s.name         = "IPOfflineQueue"
-  s.version      = "0.0.2"
+  s.version      = "0.0.4"
   s.summary      = "A persistent, serial task queue for iOS."
   s.description  = <<-DESC
                     IPOfflineQueue is a persistent, serial task queue for iOS. It's especially ideal for queuing actions that require an internet connection that may be slow or absent.
@@ -49,10 +49,10 @@ Pod::Spec.new do |s|
     LICENSE
   }
   s.author = "Marco Arment"
-  s.source       = { :git => "https://github.com/smw/IPOfflineQueue.git", :tag => "0.0.2" }
+  s.source       = { :git => "https://github.com/smw/IPOfflineQueue.git", :tag => "0.0.4" }
   s.platform     = :ios, '5.0'
   s.source_files = 'IPOfflineQueue.h', 'IPOfflineQueue.m'
   s.preserve_paths = 'IPOfflineQueue.h', 'IPOfflineQueue.m'
-  s.library = 'libsqlite3'
+  s.library = 'sqlite3'
   s.requires_arc = true
 end
