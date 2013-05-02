@@ -186,7 +186,6 @@ static NSMutableDictionary *_activeQueues = nil;
     
     self.delegate = nil;
     self.name = nil;
-    [super dealloc];
 }
 
 - (void)tryToAutoResumeForReachability
